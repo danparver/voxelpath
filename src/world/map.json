@@ -1,0 +1,25 @@
+{
+  "name": "Mapa inicial",
+  "size": { "x": 20, "y": 20, "z": 8 },
+  "voxels": [
+    { "type": "block", "x": 7, "y": 7, "z": 0 },
+    { "type": "block", "x": 8, "y": 7, "z": 0 },
+    { "type": "block", "x": 9, "y": 7, "z": 0 },
+    { "type": "block", "x": 10, "y": 7, "z": 0 },
+    { "type": "block", "x": 11, "y": 7, "z": 0 },
+    { "type": "block", "x": 12, "y": 7, "z": 0 },
+    { "type": "block", "x": 7, "y": 8, "z": 0 },
+    { "type": "block", "x": 12, "y": 8, "z": 0 },
+    { "type": "block", "x": 7, "y": 9, "z": 0 },
+    { "type": "stairs", "x": 10, "y": 9, "z": 0, "direction": "north" },
+    { "type": "block", "x": 12, "y": 9, "z": 0 },
+    { "type": "block", "x": 7, "y": 10, "z": 0 },
+    { "type": "block", "x": 12, "y": 10, "z": 0 },
+    { "type": "block", "x": 7, "y": 11, "z": 0 },
+    { "type": "block", "x": 8, "y": 11, "z": 0 },
+    { "type": "block", "x": 9, "y": 11, "z": 0 },
+    { "type": "archDoor", "x": 10, "y": 11, "z": 0, "direction": "north-south" },
+    { "type": "block", "x": 11, "y": 11, "z": 0 },
+    { "type": "block", "x": 12, "y": 11, "z": 0 }
+  ]
+}
