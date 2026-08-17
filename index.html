@@ -6,14 +6,15 @@
     <title>Laberinto 3D</title>
   </head>
   <body>
-    <div id="app"></div>
-    <div class="file-loader">
-      <label for="map-file">Cargar mapa JSON</label>
-      <input id="map-file" type="file" accept="application/json,.json" />
-      <p id="file-status" aria-live="polite">Mapa de ejemplo cargado</p>
-      <button id="camera-mode" type="button">Cambiar a Explore</button>
-      <p id="camera-help">Orbit: arrastra para rotar y usa la rueda para acercar.</p>
-    </div>
+    <section class="viewer-panel">
+      <div id="app"></div>
+      <div class="camera-toolbar" aria-label="Controles de cámara 3D">
+        <button id="camera-top" type="button">VISTA TOP</button>
+        <button id="camera-north" type="button">VISTA NORTE</button>
+        <button id="camera-rotate" type="button">ROTAR 90°</button>
+      </div>
+    </section>
+    <input id="map-file" type="file" accept="application/json,.json" hidden />
     <aside id="voxel-editor"></aside>
     <script type="module" src="/src/main.js"></script>
   </body>

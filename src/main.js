@@ -10,17 +10,20 @@ import './style.css';
 
 const app = document.querySelector('#app');
 const mapFileInput = document.querySelector('#map-file');
-const fileStatus = document.querySelector('#file-status');
-const cameraModeButton = document.querySelector('#camera-mode');
-const cameraHelp = document.querySelector('#camera-help');
 const editorElement = document.querySelector('#voxel-editor');
+const cameraTopButton = document.querySelector('#camera-top');
+const cameraNorthButton = document.querySelector('#camera-north');
+const cameraRotateButton = document.querySelector('#camera-rotate');
+const cameraToolbarButtons = [cameraTopButton, cameraNorthButton, cameraRotateButton];
+const initialWidth = Math.max(1, app.clientWidth);
+const initialHeight = Math.max(1, app.clientHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x10141f);
 
 const camera = new THREE.PerspectiveCamera(
   60,
-  window.innerWidth / window.innerHeight,
+  initialWidth / initialHeight,
   0.1,
   100,
 );
@@ -28,7 +31,7 @@ camera.position.set(8, 7, 10);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(initialWidth, initialHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -68,7 +71,16 @@ scene.add(createCardinalMarkers(20));
 
 let world;
 const voxelMap = new VoxelMap(worldMap);
-new VoxelMapEditor(editorElement, voxelMap);
+const editor = new VoxelMapEditor(editorElement, voxelMap);
+const loadMapButton = document.querySelector('#load-map-option');
+const fileStatus = document.querySelector('#file-status');
+const cameraModeButton = document.querySelector('#camera-mode');
+const cameraHelp = document.querySelector('#camera-help');
+
+loadMapButton.addEventListener('click', () => {
+  editor.closeMoreMenu();
+  mapFileInput.click();
+});
 
 function rebuildWorld() {
   const nextWorld = new World(voxelMap);
@@ -99,6 +111,7 @@ mapFileInput.addEventListener('change', async (event) => {
     fileStatus.classList.add('error');
   } finally {
     event.target.value = '';
+    if (editor.moreOptions.hidden) editor.toggleMoreMenu();
   }
 });
 
@@ -108,24 +121,77 @@ orbitControls.target.set(0, 1, 0);
 
 const exploreControls = new PointerLockControls(camera, renderer.domElement);
 const pressedKeys = new Set();
-const movement = new THREE.Vector2();
+const movement = new THREE.Vector3();
 const clock = new THREE.Clock();
 const savedOrbitPosition = new THREE.Vector3();
 const savedOrbitQuaternion = new THREE.Quaternion();
 const savedOrbitTarget = new THREE.Vector3();
+const cameraRotationAxis = new THREE.Vector3(0, 1, 0);
+const cameraTransitionDuration = 800;
 let cameraMode = 'orbit';
+let cameraTransition = null;
+
+function startCameraTransition(endPosition, endTarget) {
+  const startPosition = camera.position.clone();
+  const startTarget = orbitControls.target.clone();
+
+  orbitControls.enabled = false;
+  cameraTransition = {
+    startTime: performance.now(),
+    update(progress) {
+      camera.position.lerpVectors(startPosition, endPosition, progress);
+      orbitControls.target.lerpVectors(startTarget, endTarget, progress);
+      camera.lookAt(orbitControls.target);
+    },
+  };
+}
+
+function startCameraRotation() {
+  const target = orbitControls.target.clone();
+  const startOffset = camera.position.clone().sub(target);
+
+  orbitControls.enabled = false;
+  cameraTransition = {
+    startTime: performance.now(),
+    update(progress) {
+      const offset = startOffset.clone()
+        .applyAxisAngle(cameraRotationAxis, -Math.PI / 2 * progress);
+      camera.position.copy(target).add(offset);
+      orbitControls.target.copy(target);
+      camera.lookAt(target);
+    },
+  };
+}
+
+function updateCameraTransition(time) {
+  if (!cameraTransition) return false;
+
+  const elapsed = Math.min(1, (time - cameraTransition.startTime) / cameraTransitionDuration);
+  const eased = elapsed * elapsed * (3 - 2 * elapsed);
+  cameraTransition.update(eased);
+
+  if (elapsed === 1) {
+    cameraTransition = null;
+    orbitControls.enabled = cameraMode === 'orbit';
+    orbitControls.update();
+  }
+
+  return true;
+}
 
 function enterExploreMode() {
+  cameraTransition = null;
   savedOrbitPosition.copy(camera.position);
   savedOrbitQuaternion.copy(camera.quaternion);
   savedOrbitTarget.copy(orbitControls.target);
 
   cameraMode = 'explore';
   orbitControls.enabled = false;
-  camera.position.set(0, 1.7, 6);
-  camera.lookAt(0, 1.7, 0);
+  cameraToolbarButtons.forEach((button) => { button.disabled = true; });
+  camera.position.set(0, 0.55, 6);
+  camera.lookAt(0, 0.55, 0);
   cameraModeButton.textContent = 'Volver a Orbit (Esc)';
-  cameraHelp.textContent = 'Explore: mueve con WASD o flechas y mira con el mouse.';
+  cameraHelp.textContent = 'Explore: WASD/flechas, Espacio sube, Shift izquierdo baja y el mouse mira.';
 }
 
 function enterOrbitMode() {
@@ -135,12 +201,14 @@ function enterOrbitMode() {
   camera.quaternion.copy(savedOrbitQuaternion);
   orbitControls.target.copy(savedOrbitTarget);
   orbitControls.enabled = true;
+  cameraToolbarButtons.forEach((button) => { button.disabled = false; });
   orbitControls.update();
   cameraModeButton.textContent = 'Cambiar a Explore';
   cameraHelp.textContent = 'Orbit: arrastra para rotar y usa la rueda para acercar.';
 }
 
 cameraModeButton.addEventListener('click', () => {
+  editor.closeMoreMenu();
   if (cameraMode === 'orbit') {
     exploreControls.lock();
   } else {
@@ -151,11 +219,38 @@ cameraModeButton.addEventListener('click', () => {
 exploreControls.addEventListener('lock', enterExploreMode);
 exploreControls.addEventListener('unlock', enterOrbitMode);
 
+cameraTopButton.addEventListener('click', () => {
+  if (cameraMode !== 'orbit') return;
+  startCameraTransition(
+    new THREE.Vector3(0, 20, 0.001),
+    new THREE.Vector3(0, 0, 0),
+  );
+});
+
+cameraNorthButton.addEventListener('click', () => {
+  if (cameraMode !== 'orbit') return;
+  startCameraTransition(
+    new THREE.Vector3(0, 4, 18),
+    new THREE.Vector3(0, 2, 0),
+  );
+});
+
+cameraRotateButton.addEventListener('click', () => {
+  if (cameraMode !== 'orbit') return;
+  startCameraRotation();
+});
+
 window.addEventListener('keydown', (event) => {
   if (cameraMode !== 'explore') return;
   pressedKeys.add(event.code);
 
-  if (event.code.startsWith('Arrow')) event.preventDefault();
+  if (
+    event.code.startsWith('Arrow')
+    || event.code === 'Space'
+    || event.code === 'ShiftLeft'
+  ) {
+    event.preventDefault();
+  }
 });
 
 window.addEventListener('keyup', (event) => {
@@ -170,6 +265,8 @@ function updateExploreMovement(delta) {
   movement.set(
     Number(pressedKeys.has('KeyD') || pressedKeys.has('ArrowRight'))
       - Number(pressedKeys.has('KeyA') || pressedKeys.has('ArrowLeft')),
+    Number(pressedKeys.has('Space'))
+      - Number(pressedKeys.has('ShiftLeft')),
     Number(pressedKeys.has('KeyW') || pressedKeys.has('ArrowUp'))
       - Number(pressedKeys.has('KeyS') || pressedKeys.has('ArrowDown')),
   );
@@ -178,22 +275,26 @@ function updateExploreMovement(delta) {
 
   const distance = 4 * delta;
   exploreControls.moveRight(movement.x * distance);
-  exploreControls.moveForward(movement.y * distance);
+  camera.position.y += movement.y * distance;
+  exploreControls.moveForward(movement.z * distance);
 }
 
 function resize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const width = Math.max(1, app.clientWidth);
+  const height = Math.max(1, app.clientHeight);
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(width, height);
 }
 
 window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(app);
 
-function animate() {
+function animate(time) {
   const delta = Math.min(clock.getDelta(), 0.1);
 
   if (cameraMode === 'orbit') {
-    orbitControls.update();
+    if (!updateCameraTransition(time)) orbitControls.update();
   } else {
     updateExploreMovement(delta);
   }

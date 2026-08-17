@@ -49,6 +49,18 @@ export class VoxelMapEditor {
       <div class="history-controls" aria-label="Historial de edición">
         <button type="button" data-undo>ATRÁS</button>
         <button type="button" data-redo>ADELANTE</button>
+        <div class="more-menu">
+          <button type="button" data-more aria-expanded="false" aria-haspopup="menu">MÁS</button>
+          <div class="more-options" role="menu" data-more-options hidden>
+            <button id="load-map-option" type="button" role="menuitem">Cargar mapa JSON</button>
+            <button id="camera-mode" type="button" role="menuitem">Cambiar a Explore</button>
+            <span id="file-status" class="more-status" role="status">Mapa de ejemplo cargado</span>
+            <span id="camera-help" class="more-help">Orbit: arrastra para rotar y usa la rueda para acercar.</span>
+            <span class="more-divider" aria-hidden="true"></span>
+            <button type="button" role="menuitem" data-clear-layer>Borrar capa actual</button>
+            <button type="button" role="menuitem" data-clear-all>Borrar todo</button>
+          </div>
+        </div>
       </div>
       <div class="editor-tools" role="toolbar" aria-label="Herramientas"></div>
       <button class="direction-control" type="button" data-direction-control></button>
@@ -62,6 +74,10 @@ export class VoxelMapEditor {
     this.levelUp = this.container.querySelector('[data-level="up"]');
     this.undoButton = this.container.querySelector('[data-undo]');
     this.redoButton = this.container.querySelector('[data-redo]');
+    this.moreButton = this.container.querySelector('[data-more]');
+    this.moreOptions = this.container.querySelector('[data-more-options]');
+    this.clearLayerButton = this.container.querySelector('[data-clear-layer]');
+    this.clearAllButton = this.container.querySelector('[data-clear-all]');
     this.toolsElement = this.container.querySelector('.editor-tools');
     this.directionButton = this.container.querySelector('[data-direction-control]');
     this.saveMapButton = this.container.querySelector('[data-save-map]');
@@ -97,6 +113,19 @@ export class VoxelMapEditor {
     this.levelUp.addEventListener('click', () => this.setLevel(this.level + 1));
     this.undoButton.addEventListener('click', () => this.map.undo());
     this.redoButton.addEventListener('click', () => this.map.redo());
+    this.moreButton.addEventListener('click', () => this.toggleMoreMenu());
+    this.clearLayerButton.addEventListener('click', () => {
+      if (window.confirm(`¿Borrar todos los elementos de la capa Z ${this.level}?`)) {
+        this.map.clearLayer(this.level);
+      }
+      this.closeMoreMenu();
+    });
+    this.clearAllButton.addEventListener('click', () => {
+      if (window.confirm('¿Borrar todos los elementos del mapa?')) {
+        this.map.clearAll();
+      }
+      this.closeMoreMenu();
+    });
     this.directionButton.addEventListener('click', () => {
       if (this.tool === 'stairs') {
         this.stairsDirectionIndex = (this.stairsDirectionIndex + 1) % STAIR_DIRECTIONS.length;
@@ -138,6 +167,12 @@ export class VoxelMapEditor {
     this.gridElement.addEventListener('dragstart', (event) => event.preventDefault());
     window.addEventListener('pointerup', () => this.finishPainting());
     window.addEventListener('pointercancel', () => this.finishPainting());
+    document.addEventListener('pointerdown', (event) => {
+      if (!event.target.closest('.more-menu')) this.closeMoreMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') this.closeMoreMenu();
+    });
   }
 
   setLevel(level) {
@@ -150,6 +185,17 @@ export class VoxelMapEditor {
     this.isPainting = false;
     this.map.endTransaction();
     this.renderHistoryControls();
+  }
+
+  toggleMoreMenu() {
+    const willOpen = this.moreOptions.hidden;
+    this.moreOptions.hidden = !willOpen;
+    this.moreButton.setAttribute('aria-expanded', String(willOpen));
+  }
+
+  closeMoreMenu() {
+    this.moreOptions.hidden = true;
+    this.moreButton.setAttribute('aria-expanded', 'false');
   }
 
   saveMap() {

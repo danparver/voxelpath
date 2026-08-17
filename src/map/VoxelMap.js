@@ -73,6 +73,30 @@ export class VoxelMap {
     return true;
   }
 
+  clearLayer(z) {
+    this.assertCoordinates(0, 0, z);
+    const layerVoxels = this.voxels.filter((voxel) => voxel.z === z);
+    if (layerVoxels.length === 0) return false;
+
+    const previousState = this.transaction ? null : this.captureState();
+    layerVoxels.forEach((voxel) => {
+      this.voxelData.delete(this.key(voxel.x, voxel.y, voxel.z));
+    });
+    this.recordChange(previousState);
+    this.emit({ action: 'clear-layer', z });
+    return true;
+  }
+
+  clearAll() {
+    if (this.voxelData.size === 0) return false;
+
+    const previousState = this.transaction ? null : this.captureState();
+    this.voxelData.clear();
+    this.recordChange(previousState);
+    this.emit({ action: 'clear-all' });
+    return true;
+  }
+
   replaceFromJSON(data, notify = true) {
     if (!data || !Array.isArray(data.voxels)) {
       throw new Error('El JSON debe contener un arreglo "voxels".');

@@ -9,11 +9,32 @@
 }
 
 html,
-body,
-#app {
+body {
   width: 100%;
   height: 100%;
   margin: 0;
+  overflow: hidden;
+}
+
+body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.viewer-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #10141f;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -21,69 +42,46 @@ canvas {
   display: block;
 }
 
-.file-loader {
-  position: fixed;
-  top: 1rem;
-  left: 1rem;
-  width: min(18rem, calc(100vw - 2rem));
-  padding: 0.9rem;
-  border: 1px solid #36415d;
-  border-radius: 0.65rem;
-  background: rgb(16 20 31 / 88%);
-  backdrop-filter: blur(8px);
+.camera-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border-top: 1px solid #36415d;
+  background: #171d2a;
 }
 
-.file-loader label {
-  display: block;
-  margin-bottom: 0.55rem;
-  font-weight: 650;
-}
-
-.file-loader input {
-  width: 100%;
+.camera-toolbar button {
+  padding: 0.55rem 0.35rem;
+  border: 1px solid #4c5c7e;
+  border-radius: 0.35rem;
+  color: #eaf0ff;
+  background: #242d40;
   font: inherit;
-}
-
-.file-loader button {
-  width: 100%;
-  margin-top: 0.85rem;
-  padding: 0.6rem 0.8rem;
-  border: 1px solid #5f83c7;
-  border-radius: 0.4rem;
-  color: #f4f7ff;
-  background: #315b9d;
-  font: inherit;
+  font-size: 0.75rem;
   font-weight: 650;
   cursor: pointer;
 }
 
-.file-loader button:hover {
-  background: #3b6bb5;
+.camera-toolbar button:hover:not(:disabled) {
+  border-color: #84acff;
+  background: #315b9d;
 }
 
-.file-loader p {
-  margin: 0.55rem 0 0;
-  color: #aebbd8;
-  font-size: 0.82rem;
-}
-
-.file-loader p.error {
-  color: #ff9696;
+.camera-toolbar button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .voxel-editor {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  width: min(25rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   padding: 0.9rem;
   overflow: auto;
-  border: 1px solid #36415d;
-  border-radius: 0.65rem;
+  border-left: 1px solid #36415d;
   background: rgb(16 20 31 / 94%);
-  box-shadow: 0 1rem 3rem rgb(0 0 0 / 30%);
-  backdrop-filter: blur(8px);
+  box-shadow: -0.75rem 0 2rem rgb(0 0 0 / 20%);
 }
 
 .editor-header {
@@ -133,7 +131,7 @@ canvas {
 
 .history-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 0.7fr;
   gap: 0.4rem;
   margin-bottom: 0.65rem;
 }
@@ -147,6 +145,65 @@ canvas {
 .history-controls button:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+.more-menu {
+  position: relative;
+}
+
+.more-menu > button {
+  width: 100%;
+  height: 100%;
+}
+
+.more-options {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  width: 15rem;
+  padding: 0.35rem;
+  border: 1px solid #4c5c7e;
+  border-radius: 0.4rem;
+  background: #171d2a;
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 40%);
+}
+
+.more-options[hidden] {
+  display: none;
+}
+
+.more-options button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border: 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-options button:hover {
+  background: #35415a;
+}
+
+.more-status,
+.more-help {
+  display: block;
+  padding: 0.35rem 0.5rem 0;
+  color: #aebbd8;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.more-status.error {
+  color: #ff9696;
+}
+
+.more-divider {
+  display: block;
+  height: 1px;
+  margin: 0.4rem 0;
+  background: #3d4962;
 }
 
 .editor-tools {
@@ -249,13 +306,4 @@ canvas {
 
 .save-map:hover {
   background: #328c54;
-}
-
-@media (max-width: 850px) {
-  .voxel-editor {
-    top: auto;
-    bottom: 1rem;
-    width: min(22rem, calc(100vw - 2rem));
-    max-height: 65vh;
-  }
 }
