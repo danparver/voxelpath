@@ -34,14 +34,14 @@ function createLabel(text, color) {
   return sprite;
 }
 
-export function createCardinalMarkers(gridSize = 20) {
+export function createCardinalMarkers(gridSize = 20, westLabel = 'W') {
   const markers = new THREE.Group();
   const distance = gridSize / 2 + 0.7;
   const definitions = [
     { label: 'N', color: '#ef6461', position: [0, 0.55, -distance] },
     { label: 'S', color: '#64a8ef', position: [0, 0.55, distance] },
     { label: 'E', color: '#64a8ef', position: [distance, 0.55, 0] },
-    { label: 'O', color: '#64a8ef', position: [-distance, 0.55, 0] },
+    { label: westLabel, color: '#64a8ef', position: [-distance, 0.55, 0] },
   ];
 
   markers.name = 'CardinalMarkers';

@@ -1,3 +1,5 @@
+import { t } from '../i18n.js';
+
 export const VOXEL_TYPES = ['block', 'stairs', 'archDoor'];
 
 const TYPE_SET = new Set(VOXEL_TYPES);
@@ -6,7 +8,7 @@ const HISTORY_LIMIT = 10;
 export class VoxelMap {
   static WIDTH = 20;
   static HEIGHT = 20;
-  static LEVELS = 8;
+  static LEVELS = 22;
 
   constructor(data = { voxels: [] }) {
     this.width = VoxelMap.WIDTH;
@@ -45,7 +47,7 @@ export class VoxelMap {
     }
 
     if (!TYPE_SET.has(type)) {
-      throw new Error(`Tipo de voxel desconocido: ${type}`);
+      throw new Error(t('error.unknownVoxel', { type }));
     }
 
     const key = this.key(x, y, z);
@@ -99,7 +101,7 @@ export class VoxelMap {
 
   replaceFromJSON(data, notify = true) {
     if (!data || !Array.isArray(data.voxels)) {
-      throw new Error('El JSON debe contener un arreglo "voxels".');
+      throw new Error(t('error.invalidJson'));
     }
 
     const nextVoxels = new Map();
@@ -218,10 +220,14 @@ export class VoxelMap {
       && z >= 0 && z < this.levels;
 
     if (!valid) {
-      throw new Error(
-        `Coordenadas fuera del mapa: (${x}, ${y}, ${z}). `
-        + `Se esperaba x=0–${this.width - 1}, y=0–${this.height - 1}, z=0–${this.levels - 1}.`,
-      );
+      throw new Error(t('error.coordinates', {
+        x,
+        y,
+        z,
+        maxX: this.width - 1,
+        maxY: this.height - 1,
+        maxZ: this.levels - 1,
+      }));
     }
   }
 

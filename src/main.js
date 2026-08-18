@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { VoxelMap } from './map/VoxelMap.js';
 import { VoxelMapEditor } from './editor/VoxelMapEditor.js';
 import { World } from './world/World.js';
 import { createCardinalMarkers } from './world/createCardinalMarkers.js';
+import { getLanguage, subscribeLanguage, t } from './i18n.js';
+import { DONATION_URLS } from './config.js';
 import worldMap from './world/map.json';
 import './style.css';
 
@@ -14,6 +17,9 @@ const editorElement = document.querySelector('#voxel-editor');
 const cameraTopButton = document.querySelector('#camera-top');
 const cameraNorthButton = document.querySelector('#camera-north');
 const cameraRotateButton = document.querySelector('#camera-rotate');
+const donationToggle = document.querySelector('#donation-toggle');
+const donationOptions = document.querySelector('#donation-options');
+const donationRegionButtons = document.querySelectorAll('[data-donation-region]');
 const cameraToolbarButtons = [cameraTopButton, cameraNorthButton, cameraRotateButton];
 const initialWidth = Math.max(1, app.clientWidth);
 const initialHeight = Math.max(1, app.clientHeight);
@@ -67,20 +73,125 @@ scene.add(ground);
 const grid = new THREE.GridHelper(20, 20, 0x6173a1, 0x2d374f);
 grid.position.y = 0.002;
 scene.add(grid);
-scene.add(createCardinalMarkers(20));
+
+let cardinalMarkers;
+
+function rebuildCardinalMarkers() {
+  if (cardinalMarkers?.userData.language === getLanguage()) return;
+
+  if (cardinalMarkers) {
+    scene.remove(cardinalMarkers);
+    cardinalMarkers.traverse((object) => {
+      object.userData.texture?.dispose();
+      object.material?.dispose();
+    });
+  }
+
+  cardinalMarkers = createCardinalMarkers(20, t('direction.westShort'));
+  cardinalMarkers.userData.language = getLanguage();
+  scene.add(cardinalMarkers);
+}
+
+rebuildCardinalMarkers();
 
 let world;
 const voxelMap = new VoxelMap(worldMap);
 const editor = new VoxelMapEditor(editorElement, voxelMap);
 const loadMapButton = document.querySelector('#load-map-option');
+const exportStlButtons = document.querySelectorAll('[data-export-stl]');
 const fileStatus = document.querySelector('#file-status');
 const cameraModeButton = document.querySelector('#camera-mode');
+const cameraModeToggle = document.querySelector('#camera-mode-toggle');
+const cameraModePrefix = document.querySelector('#camera-mode-prefix');
+const cameraModeLabel = document.querySelector('#camera-mode-label');
 const cameraHelp = document.querySelector('#camera-help');
+const viewerNotices = document.querySelector('.viewer-notices');
+const cameraToolbar = document.querySelector('.camera-toolbar');
+const closeFileStatusButton = document.querySelector('#close-file-status');
+const closeCameraHelpButton = document.querySelector('#close-camera-help');
+let fileStatusMessage = { key: 'status.exampleLoaded', values: {} };
+
+document.querySelectorAll('[data-close-notice]').forEach((button) => {
+  button.addEventListener('click', () => {
+    button.closest('[data-viewer-notice]').hidden = true;
+  });
+});
+
+function showNotice(element) {
+  element.closest('[data-viewer-notice]').hidden = false;
+}
+
+let fileStatusTimeout;
+let cameraHelpTimeout;
+
+function showFileStatusTemporarily() {
+  showNotice(fileStatus);
+  window.clearTimeout(fileStatusTimeout);
+  fileStatusTimeout = window.setTimeout(() => {
+    fileStatus.closest('[data-viewer-notice]').hidden = true;
+  }, 5000);
+}
+
+function showCameraHelpTemporarily() {
+  showNotice(cameraHelp);
+  window.clearTimeout(cameraHelpTimeout);
+  cameraHelpTimeout = window.setTimeout(() => {
+    cameraHelp.closest('[data-viewer-notice]').hidden = true;
+  }, 5000);
+}
+
+showFileStatusTemporarily();
+showCameraHelpTemporarily();
 
 loadMapButton.addEventListener('click', () => {
   editor.closeMoreMenu();
   mapFileInput.click();
 });
+
+function exportStl() {
+  editor.closeMoreMenu();
+
+  const requestedSize = window.prompt(t('export.sizePrompt'), '5');
+  if (requestedSize === null) return;
+
+  const blockSizeMm = Number(requestedSize.trim().replace(',', '.'));
+  if (!Number.isFinite(blockSizeMm) || blockSizeMm <= 0) {
+    window.alert(t('export.invalidSize'));
+    return;
+  }
+
+  if (world.children.length === 0) {
+    window.alert(t('export.emptyMap'));
+    return;
+  }
+
+  const exportRoot = new THREE.Group();
+  world.children.forEach((child) => exportRoot.add(child.clone(true)));
+  exportRoot.rotation.x = Math.PI / 2;
+  exportRoot.scale.setScalar(blockSizeMm);
+  exportRoot.updateMatrixWorld(true);
+
+  const exporter = new STLExporter();
+  const stl = exporter.parse(exportRoot, { binary: true });
+  const blob = new Blob([stl], { type: 'model/stl' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeName = voxelMap.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'voxel-map';
+
+  link.href = url;
+  link.download = `${safeName}-${blockSizeMm}mm.stl`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+exportStlButtons.forEach((button) => button.addEventListener('click', exportStl));
 
 function rebuildWorld() {
   const nextWorld = new World(voxelMap);
@@ -104,14 +215,17 @@ mapFileInput.addEventListener('change', async (event) => {
   try {
     const map = JSON.parse(await file.text());
     voxelMap.replaceFromJSON(map);
-    fileStatus.textContent = `${file.name} cargado`;
+    fileStatusMessage = { key: 'status.fileLoaded', values: { file: file.name } };
+    fileStatus.textContent = t(fileStatusMessage.key, fileStatusMessage.values);
     fileStatus.classList.remove('error');
+    showFileStatusTemporarily();
   } catch (error) {
-    fileStatus.textContent = `No se pudo cargar: ${error.message}`;
+    fileStatusMessage = { key: 'status.loadFailed', values: { message: error.message } };
+    fileStatus.textContent = t(fileStatusMessage.key, fileStatusMessage.values);
     fileStatus.classList.add('error');
+    showFileStatusTemporarily();
   } finally {
     event.target.value = '';
-    if (editor.moreOptions.hidden) editor.toggleMoreMenu();
   }
 });
 
@@ -130,6 +244,69 @@ const cameraRotationAxis = new THREE.Vector3(0, 1, 0);
 const cameraTransitionDuration = 800;
 let cameraMode = 'orbit';
 let cameraTransition = null;
+
+function renderMainLanguage() {
+  document.title = t('app.title');
+  cameraModePrefix.textContent = t('viewer.mode');
+  cameraModeToggle.setAttribute('aria-label', t('viewer.toggleMode'));
+  viewerNotices.setAttribute('aria-label', t('viewer.information'));
+  closeFileStatusButton.setAttribute('aria-label', t('viewer.closeMapStatus'));
+  closeCameraHelpButton.setAttribute('aria-label', t('viewer.closeCameraHelp'));
+  cameraToolbar.setAttribute('aria-label', t('viewer.cameraControls'));
+  cameraTopButton.textContent = t('viewer.top');
+  cameraNorthButton.textContent = t('viewer.north');
+  cameraRotateButton.textContent = t('viewer.rotate');
+  donationToggle.textContent = t('donation.button');
+  donationToggle.setAttribute('aria-label', t('donation.selectRegion'));
+  donationRegionButtons.forEach((button) => {
+    button.textContent = t(`donation.${button.dataset.donationRegion}`);
+  });
+  cameraModeLabel.textContent = cameraMode === 'orbit' ? 'Orbit' : 'Explore';
+  cameraModeButton.textContent = t(
+    cameraMode === 'orbit' ? 'camera.switchExplore' : 'camera.switchOrbit',
+  );
+  cameraHelp.textContent = t(
+    cameraMode === 'orbit' ? 'camera.orbitHelp' : 'camera.exploreHelp',
+  );
+  fileStatus.textContent = t(fileStatusMessage.key, fileStatusMessage.values);
+  rebuildCardinalMarkers();
+}
+
+renderMainLanguage();
+subscribeLanguage(renderMainLanguage);
+
+function closeDonationMenu() {
+  donationOptions.hidden = true;
+  donationToggle.setAttribute('aria-expanded', 'false');
+}
+
+donationToggle.addEventListener('click', () => {
+  const willOpen = donationOptions.hidden;
+  donationOptions.hidden = !willOpen;
+  donationToggle.setAttribute('aria-expanded', String(willOpen));
+});
+
+donationRegionButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const url = DONATION_URLS[button.dataset.donationRegion];
+    closeDonationMenu();
+
+    if (!url) {
+      window.alert(t('donation.notConfigured'));
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  });
+});
+
+document.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest('.donation-control')) closeDonationMenu();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeDonationMenu();
+});
 
 function startCameraTransition(endPosition, endTarget) {
   const startPosition = camera.position.clone();
@@ -190,8 +367,8 @@ function enterExploreMode() {
   cameraToolbarButtons.forEach((button) => { button.disabled = true; });
   camera.position.set(0, 0.55, 6);
   camera.lookAt(0, 0.55, 0);
-  cameraModeButton.textContent = 'Volver a Orbit (Esc)';
-  cameraHelp.textContent = 'Explore: WASD/flechas, Espacio sube, Shift izquierdo baja y el mouse mira.';
+  renderMainLanguage();
+  showCameraHelpTemporarily();
 }
 
 function enterOrbitMode() {
@@ -203,18 +380,21 @@ function enterOrbitMode() {
   orbitControls.enabled = true;
   cameraToolbarButtons.forEach((button) => { button.disabled = false; });
   orbitControls.update();
-  cameraModeButton.textContent = 'Cambiar a Explore';
-  cameraHelp.textContent = 'Orbit: arrastra para rotar y usa la rueda para acercar.';
+  renderMainLanguage();
+  showCameraHelpTemporarily();
 }
 
-cameraModeButton.addEventListener('click', () => {
+function toggleCameraMode() {
   editor.closeMoreMenu();
   if (cameraMode === 'orbit') {
     exploreControls.lock();
   } else {
     exploreControls.unlock();
   }
-});
+}
+
+cameraModeButton.addEventListener('click', toggleCameraMode);
+cameraModeToggle.addEventListener('click', toggleCameraMode);
 
 exploreControls.addEventListener('lock', enterExploreMode);
 exploreControls.addEventListener('unlock', enterOrbitMode);
@@ -242,15 +422,17 @@ cameraRotateButton.addEventListener('click', () => {
 
 window.addEventListener('keydown', (event) => {
   if (cameraMode !== 'explore') return;
+  if (![
+    'KeyW',
+    'KeyA',
+    'KeyS',
+    'KeyD',
+    'Space',
+    'ShiftLeft',
+    'ShiftRight',
+  ].includes(event.code)) return;
   pressedKeys.add(event.code);
-
-  if (
-    event.code.startsWith('Arrow')
-    || event.code === 'Space'
-    || event.code === 'ShiftLeft'
-  ) {
-    event.preventDefault();
-  }
+  event.preventDefault();
 });
 
 window.addEventListener('keyup', (event) => {
@@ -263,12 +445,10 @@ function updateExploreMovement(delta) {
   if (cameraMode !== 'explore' || !exploreControls.isLocked) return;
 
   movement.set(
-    Number(pressedKeys.has('KeyD') || pressedKeys.has('ArrowRight'))
-      - Number(pressedKeys.has('KeyA') || pressedKeys.has('ArrowLeft')),
+    Number(pressedKeys.has('KeyD')) - Number(pressedKeys.has('KeyA')),
     Number(pressedKeys.has('Space'))
-      - Number(pressedKeys.has('ShiftLeft')),
-    Number(pressedKeys.has('KeyW') || pressedKeys.has('ArrowUp'))
-      - Number(pressedKeys.has('KeyS') || pressedKeys.has('ArrowDown')),
+      - Number(pressedKeys.has('ShiftLeft') || pressedKeys.has('ShiftRight')),
+    Number(pressedKeys.has('KeyW')) - Number(pressedKeys.has('KeyS')),
   );
 
   if (movement.lengthSq() > 0) movement.normalize();

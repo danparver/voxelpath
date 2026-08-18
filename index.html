@@ -1,17 +1,38 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Laberinto 3D</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>3D Maze</title>
   </head>
   <body>
     <section class="viewer-panel">
       <div id="app"></div>
-      <div class="camera-toolbar" aria-label="Controles de cámara 3D">
-        <button id="camera-top" type="button">VISTA TOP</button>
-        <button id="camera-north" type="button">VISTA NORTE</button>
-        <button id="camera-rotate" type="button">ROTAR 90°</button>
+      <button class="viewer-mode-bar" id="camera-mode-toggle" type="button" aria-label="Toggle camera mode">
+        <span id="camera-mode-prefix">Mode:</span> <strong id="camera-mode-label">Orbit</strong>
+      </button>
+      <div class="viewer-notices" aria-label="3D view information">
+        <div class="viewer-notice" data-viewer-notice>
+          <span id="file-status" role="status">Example map loaded</span>
+          <button id="close-file-status" type="button" data-close-notice aria-label="Close map status">×</button>
+        </div>
+        <div class="viewer-notice" data-viewer-notice>
+          <span id="camera-help">Orbit: drag to rotate and use the wheel to zoom.</span>
+          <button id="close-camera-help" type="button" data-close-notice aria-label="Close camera help">×</button>
+        </div>
+      </div>
+      <div class="camera-toolbar" aria-label="3D camera controls">
+        <button id="camera-top" type="button">TOP VIEW</button>
+        <button id="camera-north" type="button">ALIGN WITH 2D</button>
+        <button id="camera-rotate" type="button">ROTATE 90°</button>
+        <div class="donation-control">
+          <button id="donation-toggle" type="button" aria-expanded="false" aria-haspopup="menu">DONATE</button>
+          <div class="donation-options" id="donation-options" role="menu" hidden>
+            <button type="button" role="menuitem" data-donation-region="argentina">Argentina</button>
+            <button type="button" role="menuitem" data-donation-region="worldwide">Rest of the world</button>
+          </div>
+        </div>
       </div>
     </section>
     <input id="map-file" type="file" accept="application/json,.json" hidden />

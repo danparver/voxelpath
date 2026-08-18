@@ -1,23 +1,44 @@
 import { VOXEL_TYPES } from '../map/VoxelMap.js';
+import {
+  getLanguage,
+  LANGUAGES,
+  setLanguage,
+  subscribeLanguage,
+  t,
+} from '../i18n.js';
 
 const TOOL_LABELS = {
-  block: 'Block',
-  stairs: 'Stairs',
-  archDoor: 'Puerta arco',
-  erase: 'Erase',
+  block: 'tool.block',
+  stairs: 'tool.stairs',
+  archDoor: 'tool.archDoor',
+  erase: 'tool.erase',
 };
 
 const STAIR_DIRECTIONS = [
-  { value: 'north', label: 'Norte', icon: '↑' },
-  { value: 'east', label: 'Este', icon: '→' },
-  { value: 'south', label: 'Sur', icon: '↓' },
-  { value: 'west', label: 'Oeste', icon: '←' },
+  { value: 'north', labelKey: 'direction.north', icon: '↑' },
+  { value: 'east', labelKey: 'direction.east', icon: '→' },
+  { value: 'south', labelKey: 'direction.south', icon: '↓' },
+  { value: 'west', labelKey: 'direction.west', icon: '←' },
 ];
 
 const ARCH_DOOR_DIRECTIONS = [
-  { value: 'north-south', label: 'N–S', icon: '↕' },
-  { value: 'east-west', label: 'E–O', icon: '↔' },
+  { value: 'north-south', labelKey: 'direction.northSouth', icon: '↕' },
+  { value: 'east-west', labelKey: 'direction.eastWest', icon: '↔' },
 ];
+
+const TOOL_SHORTCUTS = {
+  Digit1: 'block',
+  Digit2: 'stairs',
+  Digit3: 'archDoor',
+  Digit4: 'erase',
+};
+
+const ARROW_MOVEMENT = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
 
 export class VoxelMapEditor {
   constructor(container, voxelMap) {
@@ -27,6 +48,8 @@ export class VoxelMapEditor {
     this.tool = 'block';
     this.stairsDirectionIndex = 0;
     this.archDoorDirectionIndex = 0;
+    this.cursorX = 10;
+    this.cursorY = 10;
     this.isPainting = false;
     this.cells = [];
 
@@ -39,37 +62,45 @@ export class VoxelMapEditor {
     this.container.classList.add('voxel-editor');
     this.container.innerHTML = `
       <div class="editor-header">
-        <h2>Editor 2D</h2>
+        <h2>Voxel Path</h2>
         <div class="level-controls">
-          <button type="button" data-level="down" aria-label="Bajar nivel">−</button>
-          <strong>Nivel Z: <span data-level-label>0</span></strong>
-          <button type="button" data-level="up" aria-label="Subir nivel">+</button>
+          <button type="button" data-level="down">−</button>
+          <strong><span data-level-title></span> <span data-level-label>0</span></strong>
+          <button type="button" data-level="up">+</button>
         </div>
       </div>
-      <div class="history-controls" aria-label="Historial de edición">
-        <button type="button" data-undo>ATRÁS</button>
-        <button type="button" data-redo>ADELANTE</button>
+      <div class="history-controls">
+        <button type="button" data-undo></button>
+        <button type="button" data-redo></button>
         <div class="more-menu">
-          <button type="button" data-more aria-expanded="false" aria-haspopup="menu">MÁS</button>
+          <button type="button" data-more aria-expanded="false" aria-haspopup="menu"></button>
           <div class="more-options" role="menu" data-more-options hidden>
-            <button id="load-map-option" type="button" role="menuitem">Cargar mapa JSON</button>
-            <button id="camera-mode" type="button" role="menuitem">Cambiar a Explore</button>
-            <span id="file-status" class="more-status" role="status">Mapa de ejemplo cargado</span>
-            <span id="camera-help" class="more-help">Orbit: arrastra para rotar y usa la rueda para acercar.</span>
+            <label class="language-control">
+              <span data-language-label></span>
+              <select data-language></select>
+            </label>
+            <button id="load-map-option" type="button" role="menuitem"></button>
+            <button id="export-json-option" type="button" role="menuitem"></button>
+            <button id="export-stl-option" type="button" role="menuitem" data-export-stl></button>
+            <button id="camera-mode" type="button" role="menuitem"></button>
             <span class="more-divider" aria-hidden="true"></span>
-            <button type="button" role="menuitem" data-clear-layer>Borrar capa actual</button>
-            <button type="button" role="menuitem" data-clear-all>Borrar todo</button>
+            <button type="button" role="menuitem" data-clear-layer></button>
+            <button type="button" role="menuitem" data-clear-all></button>
           </div>
         </div>
       </div>
-      <div class="editor-tools" role="toolbar" aria-label="Herramientas"></div>
+      <div class="editor-tools" role="toolbar"></div>
       <button class="direction-control" type="button" data-direction-control></button>
-      <div class="editor-grid" role="grid" aria-label="Mapa de voxeles 20 por 20"></div>
-      <p class="editor-hint">Arrastra para pintar · Click derecho para borrar</p>
-      <button class="save-map" type="button" data-save-map>Guardar JSON</button>
+      <div class="editor-grid" role="grid"></div>
+      <p class="editor-hint"><span data-hint-primary></span><br><span data-hint-keyboard></span></p>
+      <div class="export-controls">
+        <button class="export-map" type="button" data-save-map></button>
+        <button class="export-map" type="button" data-export-stl></button>
+      </div>
     `;
 
     this.levelLabel = this.container.querySelector('[data-level-label]');
+    this.levelTitle = this.container.querySelector('[data-level-title]');
     this.levelDown = this.container.querySelector('[data-level="down"]');
     this.levelUp = this.container.querySelector('[data-level="up"]');
     this.undoButton = this.container.querySelector('[data-undo]');
@@ -81,17 +112,23 @@ export class VoxelMapEditor {
     this.toolsElement = this.container.querySelector('.editor-tools');
     this.directionButton = this.container.querySelector('[data-direction-control]');
     this.saveMapButton = this.container.querySelector('[data-save-map]');
+    this.exportJsonOption = this.container.querySelector('#export-json-option');
     this.gridElement = this.container.querySelector('.editor-grid');
+    this.languageSelect = this.container.querySelector('[data-language]');
+
+    for (const { code, label } of LANGUAGES) {
+      const option = document.createElement('option');
+      option.value = code;
+      option.textContent = label;
+      this.languageSelect.appendChild(option);
+    }
 
     for (const tool of [...VOXEL_TYPES, 'erase']) {
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.tool = tool;
-      button.textContent = TOOL_LABELS[tool];
-      button.addEventListener('click', () => {
-        this.tool = tool;
-        this.renderTools();
-      });
+      button.textContent = t(TOOL_LABELS[tool]);
+      button.addEventListener('click', () => this.selectTool(tool));
       this.toolsElement.appendChild(button);
     }
 
@@ -103,7 +140,7 @@ export class VoxelMapEditor {
         cell.dataset.x = x;
         cell.dataset.y = y;
         cell.setAttribute('role', 'gridcell');
-        cell.setAttribute('aria-label', `Celda ${x}, ${y}`);
+        cell.setAttribute('aria-label', t('editor.cell', { x, y }));
         this.gridElement.appendChild(cell);
         this.cells.push(cell);
       }
@@ -114,32 +151,30 @@ export class VoxelMapEditor {
     this.undoButton.addEventListener('click', () => this.map.undo());
     this.redoButton.addEventListener('click', () => this.map.redo());
     this.moreButton.addEventListener('click', () => this.toggleMoreMenu());
+    this.languageSelect.addEventListener('change', (event) => setLanguage(event.target.value));
     this.clearLayerButton.addEventListener('click', () => {
-      if (window.confirm(`¿Borrar todos los elementos de la capa Z ${this.level}?`)) {
+      if (window.confirm(t('editor.clearLayerConfirm', { level: this.level }))) {
         this.map.clearLayer(this.level);
       }
       this.closeMoreMenu();
     });
     this.clearAllButton.addEventListener('click', () => {
-      if (window.confirm('¿Borrar todos los elementos del mapa?')) {
+      if (window.confirm(t('editor.clearAllConfirm'))) {
         this.map.clearAll();
       }
       this.closeMoreMenu();
     });
-    this.directionButton.addEventListener('click', () => {
-      if (this.tool === 'stairs') {
-        this.stairsDirectionIndex = (this.stairsDirectionIndex + 1) % STAIR_DIRECTIONS.length;
-      } else if (this.tool === 'archDoor') {
-        this.archDoorDirectionIndex = (this.archDoorDirectionIndex + 1)
-          % ARCH_DOOR_DIRECTIONS.length;
-      }
-      this.renderTools();
-    });
+    this.directionButton.addEventListener('click', () => this.rotateCurrentTool());
     this.saveMapButton.addEventListener('click', () => this.saveMap());
+    this.exportJsonOption.addEventListener('click', () => {
+      this.saveMap();
+      this.closeMoreMenu();
+    });
 
     this.gridElement.addEventListener('pointerdown', (event) => {
       const cell = event.target.closest('.editor-cell');
       if (!cell) return;
+      this.setCursorFromCell(cell);
 
       if (event.button === 0) {
         this.isPainting = true;
@@ -153,6 +188,7 @@ export class VoxelMapEditor {
     this.gridElement.addEventListener('pointerover', (event) => {
       const cell = event.target.closest('.editor-cell');
       if (cell && this.isPainting && (event.buttons & 1) === 1) {
+        this.setCursorFromCell(cell);
         this.applyTool(cell, this.tool);
       }
     });
@@ -172,12 +208,98 @@ export class VoxelMapEditor {
     });
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.closeMoreMenu();
+      this.handleKeyboard(event);
+    });
+
+    this.renderLanguage();
+    this.unsubscribeLanguage = subscribeLanguage(() => {
+      this.renderLanguage();
+      this.render();
     });
   }
 
   setLevel(level) {
     this.level = Math.max(0, Math.min(this.map.levels - 1, level));
     this.render();
+  }
+
+  selectTool(tool) {
+    this.tool = tool;
+    this.renderTools();
+  }
+
+  rotateCurrentTool() {
+    if (this.tool === 'stairs') {
+      this.stairsDirectionIndex = (this.stairsDirectionIndex + 1) % STAIR_DIRECTIONS.length;
+    } else if (this.tool === 'archDoor') {
+      this.archDoorDirectionIndex = (this.archDoorDirectionIndex + 1)
+        % ARCH_DOOR_DIRECTIONS.length;
+    }
+    this.renderTools();
+  }
+
+  setCursorFromCell(cell) {
+    this.cursorX = Number(cell.dataset.x);
+    this.cursorY = Number(cell.dataset.y);
+    this.renderCursor();
+  }
+
+  moveCursor(deltaX, deltaY) {
+    this.cursorX = Math.max(0, Math.min(this.map.width - 1, this.cursorX + deltaX));
+    this.cursorY = Math.max(0, Math.min(this.map.height - 1, this.cursorY + deltaY));
+    this.renderCursor();
+  }
+
+  renderCursor() {
+    this.cells.forEach((cell) => cell.classList.remove('is-cursor'));
+    this.cells[this.cursorY * this.map.width + this.cursorX]?.classList.add('is-cursor');
+  }
+
+  handleKeyboard(event) {
+    const target = event.target;
+    if (
+      document.pointerLockElement
+      || target.matches('input, textarea, select')
+    ) return;
+
+    if (event.ctrlKey && event.code === 'KeyZ') {
+      event.preventDefault();
+      this.map.undo();
+      return;
+    }
+
+    if (event.ctrlKey && event.code === 'KeyX') {
+      event.preventDefault();
+      this.map.redo();
+      return;
+    }
+
+    if (TOOL_SHORTCUTS[event.code]) {
+      event.preventDefault();
+      this.selectTool(TOOL_SHORTCUTS[event.code]);
+      return;
+    }
+
+    if (ARROW_MOVEMENT[event.code]) {
+      event.preventDefault();
+      this.moveCursor(...ARROW_MOVEMENT[event.code]);
+      return;
+    }
+
+    if (event.code === 'Space') {
+      event.preventDefault();
+      const cell = this.cells[this.cursorY * this.map.width + this.cursorX];
+      this.applyTool(cell, this.tool);
+    } else if (event.code === 'PageDown') {
+      event.preventDefault();
+      this.setLevel(this.level + 1);
+    } else if (event.code === 'PageUp') {
+      event.preventDefault();
+      this.setLevel(this.level - 1);
+    } else if (event.code === 'KeyR') {
+      event.preventDefault();
+      this.rotateCurrentTool();
+    }
   }
 
   finishPainting() {
@@ -196,6 +318,42 @@ export class VoxelMapEditor {
   closeMoreMenu() {
     this.moreOptions.hidden = true;
     this.moreButton.setAttribute('aria-expanded', 'false');
+  }
+
+  renderLanguage() {
+    this.levelTitle.textContent = t('editor.level');
+    this.levelDown.setAttribute('aria-label', t('editor.levelDown'));
+    this.levelUp.setAttribute('aria-label', t('editor.levelUp'));
+    this.container.querySelector('.history-controls')
+      .setAttribute('aria-label', t('editor.history'));
+    this.undoButton.textContent = t('editor.undo');
+    this.redoButton.textContent = t('editor.redo');
+    this.moreButton.textContent = t('editor.more');
+    this.container.querySelector('#load-map-option').textContent = t('editor.loadJson');
+    this.exportJsonOption.textContent = t('editor.exportJson');
+    this.container.querySelector('#export-stl-option').textContent = t('editor.exportStl');
+    this.container.querySelector('.export-controls [data-export-stl]').textContent = t('editor.exportStl');
+    this.clearLayerButton.textContent = t('editor.clearLayer');
+    this.clearAllButton.textContent = t('editor.clearAll');
+    this.container.querySelector('[data-language-label]').textContent = t('language.label');
+    this.languageSelect.setAttribute('aria-label', t('language.label'));
+    this.languageSelect.value = getLanguage();
+    this.toolsElement.setAttribute('aria-label', t('editor.tools'));
+    this.gridElement.setAttribute('aria-label', t('editor.grid'));
+    this.container.querySelector('[data-hint-primary]').textContent = t('editor.hintPrimary');
+    this.container.querySelector('[data-hint-keyboard]').textContent = t('editor.hintKeyboard');
+    this.saveMapButton.textContent = t('editor.exportJson');
+
+    for (const button of this.toolsElement.children) {
+      button.textContent = t(TOOL_LABELS[button.dataset.tool]);
+    }
+
+    for (const cell of this.cells) {
+      cell.setAttribute('aria-label', t('editor.cell', {
+        x: cell.dataset.x,
+        y: cell.dataset.y,
+      }));
+    }
   }
 
   saveMap() {
@@ -261,19 +419,29 @@ export class VoxelMapEditor {
           const direction = STAIR_DIRECTIONS.find(({ value }) => value === voxel.direction)
             ?? STAIR_DIRECTIONS[0];
           cell.textContent = direction.icon;
-          cell.title += ` · Escalera hacia ${direction.label.toLowerCase()}`;
+          cell.title += ` · ${t('editor.stairsToward', {
+            direction: t(direction.labelKey).toLowerCase(),
+          })}`;
         } else if (voxel.type === 'archDoor') {
           const direction = ARCH_DOOR_DIRECTIONS.find(({ value }) => value === voxel.direction)
             ?? ARCH_DOOR_DIRECTIONS[0];
           cell.textContent = direction.icon;
-          cell.title += ` · Puerta de arco ${direction.label}`;
+          cell.title += ` · ${t('editor.archDoorDirection', {
+            direction: t(direction.labelKey),
+          })}`;
         }
       } else if (voxelBelow) {
         cell.classList.add('has-voxel-below');
-        cell.title += ` · ${voxelBelow.type} en Z-1`;
+        cell.title += ` · ${t('editor.voxelBelow', {
+          type: t(TOOL_LABELS[voxelBelow.type] ?? voxelBelow.type),
+        })}`;
         delete cell.dataset.type;
       } else {
         delete cell.dataset.type;
+      }
+
+      if (x === this.cursorX && y === this.cursorY) {
+        cell.classList.add('is-cursor');
       }
     }
   }
@@ -287,16 +455,22 @@ export class VoxelMapEditor {
 
     if (this.tool === 'stairs') {
       const direction = STAIR_DIRECTIONS[this.stairsDirectionIndex];
-      this.directionButton.textContent = `Rotar escalera: ${direction.icon} ${direction.label}`;
+      this.directionButton.textContent = t('editor.rotateStairs', {
+        icon: direction.icon,
+        direction: t(direction.labelKey),
+      });
       this.directionButton.style.visibility = 'visible';
       this.directionButton.setAttribute('aria-hidden', 'false');
     } else if (this.tool === 'archDoor') {
       const direction = ARCH_DOOR_DIRECTIONS[this.archDoorDirectionIndex];
-      this.directionButton.textContent = `Orientar puerta: ${direction.icon} ${direction.label}`;
+      this.directionButton.textContent = t('editor.orientDoor', {
+        icon: direction.icon,
+        direction: t(direction.labelKey),
+      });
       this.directionButton.style.visibility = 'visible';
       this.directionButton.setAttribute('aria-hidden', 'false');
     } else {
-      this.directionButton.textContent = 'Control de dirección';
+      this.directionButton.textContent = t('editor.directionControl');
       this.directionButton.style.visibility = 'hidden';
       this.directionButton.setAttribute('aria-hidden', 'true');
     }
