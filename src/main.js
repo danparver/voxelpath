@@ -7,7 +7,6 @@ import { VoxelMapEditor } from './editor/VoxelMapEditor.js';
 import { World } from './world/World.js';
 import { createCardinalMarkers } from './world/createCardinalMarkers.js';
 import { getLanguage, subscribeLanguage, t } from './i18n.js';
-import { DONATION_URLS } from './config.js';
 import worldMap from './world/map.json';
 import './style.css';
 
@@ -17,6 +16,7 @@ const editorElement = document.querySelector('#voxel-editor');
 const cameraTopButton = document.querySelector('#camera-top');
 const cameraNorthButton = document.querySelector('#camera-north');
 const cameraRotateButton = document.querySelector('#camera-rotate');
+const donationControl = document.querySelector('.donation-control');
 const donationToggle = document.querySelector('#donation-toggle');
 const donationOptions = document.querySelector('#donation-options');
 const donationRegionButtons = document.querySelectorAll('[data-donation-region]');
@@ -280,25 +280,53 @@ function closeDonationMenu() {
   donationToggle.setAttribute('aria-expanded', 'false');
 }
 
-donationToggle.addEventListener('click', () => {
-  const willOpen = donationOptions.hidden;
-  donationOptions.hidden = !willOpen;
-  donationToggle.setAttribute('aria-expanded', String(willOpen));
-});
+function getDonationUrl(value) {
+  if (typeof value !== 'string') return null;
 
-donationRegionButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    const url = DONATION_URLS[button.dataset.donationRegion];
-    closeDonationMenu();
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
-    if (!url) {
-      window.alert(t('donation.notConfigured'));
-      return;
-    }
+async function setupDonations() {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}donations.json`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return;
 
-    window.open(url, '_blank', 'noopener,noreferrer');
-  });
-});
+    const config = await response.json();
+    let configuredRegions = 0;
+
+    donationRegionButtons.forEach((button) => {
+      const url = getDonationUrl(config[button.dataset.donationRegion]);
+      button.hidden = !url;
+      if (!url) return;
+
+      configuredRegions += 1;
+      button.addEventListener('click', () => {
+        closeDonationMenu();
+        window.open(url, '_blank', 'noopener,noreferrer');
+      });
+    });
+
+    if (configuredRegions === 0) return;
+
+    donationToggle.addEventListener('click', () => {
+      const willOpen = donationOptions.hidden;
+      donationOptions.hidden = !willOpen;
+      donationToggle.setAttribute('aria-expanded', String(willOpen));
+    });
+    donationControl.hidden = false;
+  } catch {
+    // The donation configuration is optional.
+  }
+}
+
+setupDonations();
 
 document.addEventListener('pointerdown', (event) => {
   if (!event.target.closest('.donation-control')) closeDonationMenu();
